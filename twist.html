@@ -1,0 +1,219 @@
+<html>
+  <head>
+    <title>snake</title>
+    <script>
+      function Color(r, g, b) {
+        this.r = r;
+        this.g = g;
+        this.b = b;
+        this.toString = function () {
+          return "rgb(" + this.r + "," + this.g + "," + this.b + ")";
+        }
+      }
+      function randInt(min, max) {
+        return (Math.random() * (max-min) + min) | 0;
+      }
+      function randomColor() {
+        return new Color(randInt(0,255), randInt(0,255), randInt(0,255));
+      }
+      function randomPastelColor() {
+        return new Color(randInt(200,255), randInt(200,255), randInt(200,255));
+      }
+      function Position(x,y) {
+        this.x = x;
+        this.y = y;
+      }
+      function Snake(state) {
+        this.positions = [new Position(state.boardWidth/2, state.boardHeight/2)];
+        this.positions.push(new Position(this.positions[0].x, this.positions[0].y + 1));
+        this.direction = new Position(1,0);
+      }
+      function oppositeDirection(dir) {
+        var LEFT = new Position(-1, 0);
+        var RIGHT = new Position(1, 0);
+        var UP = new Position(0, -1);
+        var DOWN = new Position(0, 1);
+        if (positionEqual(dir, LEFT)) {
+          return RIGHT;
+        } else if (positionEqual(dir, RIGHT)) {
+          return LEFT;
+        } else if (positionEqual(dir, UP)) {
+          return DOWN;
+        } else if (positionEqual(dir, DOWN)) {
+          return UP;
+        }
+        return LEFT;
+      }
+      function positionEqual(a, b) {
+        return a.x == b.x && a.y == b.y;
+      }
+      function isOccupied(state, position) {
+        var snakePos = state.snake.positions;
+        for (var i = 0; i < snakePos.length; i++) {
+          if (positionEqual(snakePos[i], position)) {
+            return true;
+          }
+        }
+        if (positionEqual(state.fruit, position)) {
+          return true;
+        }
+        return false;
+      }
+      function randomPosition(state, position) {
+        return new Position(randInt(0, state.boardWidth), randInt(0, state.boardHeight));
+      }
+      function randomEmptyPosition(state) {
+        var pos = randomPosition(state);
+        while(isOccupied(state, pos)) {
+         pos = randomPosition(state);
+        }
+        return pos;
+      }
+      function setState(state) {
+        var CANVAS_WIDTH = 500;
+        var CANVAS_HEIGHT = CANVAS_WIDTH;
+        var BOARD_WIDTH = 40;
+        var BOARD_HEIGHT = 40;
+        state.canvasWidth = CANVAS_WIDTH;
+        state.canvasHeight = CANVAS_HEIGHT;
+        state.boardWidth = BOARD_WIDTH;
+        state.boardHeight = BOARD_HEIGHT;
+        state.squareSize = CANVAS_WIDTH/BOARD_WIDTH;
+        state.timeOfLastStep = 0;
+        state.lost = false;
+        state.backgroundColor = randomPastelColor().toString();
+        state.snake = new Snake(state);
+        state.fruit = state.snake.positions[0];
+        state.fruit = randomEmptyPosition(state);
+        console.log("createdState");
+        return state;
+      }
+      function drawAtPosition(ctx, state, pos) {
+        ctx.fillRect(pos.x * state.squareSize, pos.y * state.squareSize,
+            state.squareSize, state.squareSize);
+      }
+      function draw(ctx, state) {
+        if (state.lost) {
+          ctx.fillStyle = "black";
+          ctx.font = "30px Consolas";
+          ctx.textAlign = "center";
+          ctx.fillText("Uh oh!",
+            state.canvasWidth/2,state.canvasHeight/2);
+          ctx.fillText("Press any key to play again.",
+            state.canvasWidth/2,state.canvasHeight/2 + 30);
+          return;
+        }
+
+        // background
+        ctx.fillStyle = state.backgroundColor;
+        ctx.fillRect(0, 0, state.canvasWidth, state.canvasHeight);
+
+        // fruit
+        ctx.fillStyle = "red";
+        drawAtPosition(ctx, state, state.fruit);
+
+        // snake
+        ctx.fillStyle = "black";
+        var pos = state.snake.positions;
+        for (var i = 0; i < pos.length; i++) {
+          drawAtPosition(ctx, state, pos[i]);
+        }
+      }
+      function lost(state) {
+        var pos = state.snake.positions;
+        var head = pos[0];
+        // self-collide
+        for (var i = 1; i < pos.length; i++) {
+          if (positionEqual(head, pos[i])) {
+            return true;
+          }
+        }
+        // out of bounds
+        if (head.x < 0 || head.x >= state.boardWidth ||
+          head.y < 0 || head.y >= state.boardHeight) {
+          return true;
+        }
+        return false;
+      }
+      function step(state) {
+        if (state.lost) {
+          return;
+        }
+        var pos = state.snake.positions;
+        if (positionEqual(pos[0], state.fruit)) {
+          // eaten fruit becomes head
+          pos.unshift(state.fruit);
+          pos.reverse();
+          state.snake.direction = oppositeDirection(state.snake.direction);
+          if (positionEqual(pos[0] + state.snake.direction, pos[1])) {
+            state.snake.direction = oppositeDirection(state.snake.direction);
+          }
+          state.fruit = randomEmptyPosition(state);
+          state.backgroundColor = randomPastelColor().toString();
+        } else {
+          // move snake
+          var newHead = pos.pop();
+          newHead.x = pos[0].x + state.snake.direction.x;
+          newHead.y = pos[0].y + state.snake.direction.y;
+          pos.unshift(newHead);
+          if (lost(state)) {
+            state.lost = true;
+          }
+        }
+      }
+      function init() {
+        var canvas = document.getElementById('main_canvas');
+        var ctx = canvas.getContext('2d');
+        var state = {};
+        var state = setState(state);
+        console.log(state);
+        document.addEventListener('keydown', (event) => {
+          if (state.lost) {
+            setState(state);
+          }
+          const keyName = event.key;
+          var LEFT = new Position(-1, 0);
+          var RIGHT = new Position(1, 0);
+          var UP = new Position(0, -1);
+          var DOWN = new Position(0, 1);
+          if (keyName == "ArrowLeft") {
+            if (!positionEqual(state.snake.direction, RIGHT)) {
+              state.snake.direction = LEFT;
+            }
+            event.preventDefault();
+          } else if (keyName == "ArrowRight") {
+            if (!positionEqual(state.snake.direction, LEFT)) {
+              state.snake.direction = RIGHT;
+            }
+            event.preventDefault();
+          } else if (keyName == "ArrowUp") {
+            if (!positionEqual(state.snake.direction, DOWN)) {
+              state.snake.direction = UP;
+            }
+            event.preventDefault();
+          } else if (keyName == "ArrowDown") {
+            if (!positionEqual(state.snake.direction, UP)) {
+              state.snake.direction = DOWN;
+            }
+            event.preventDefault();
+          }
+        })
+        animate(ctx, state);
+      };
+      function animate(ctx, state) {
+        window.requestAnimationFrame(function (ts) {
+          if (ts - state.timeOfLastStep > 100) {
+            step(state);
+            state.timeOfLastStep = ts;
+            draw(ctx, state);
+          }
+          animate(ctx, state);
+        });
+      }
+    </script>
+  </head>
+  <body onload="init();">
+    <canvas id="main_canvas" width="500" height="500">
+    </canvas>
+  </body>
+</html>
