@@ -2,6 +2,10 @@
   <head>
     <title>snake</title>
     <script>
+      let MODE_CLASSIC = 1;
+      let MODE_TWIST = 2;
+      let SCREEN_INTRO = 1;
+      let SCREEN_GAME = 2;
       function Color(r, g, b) {
         this.r = r;
         this.g = g;
@@ -23,10 +27,39 @@
         this.x = x;
         this.y = y;
       }
+      var LEFT = new Position(-1, 0);
+      var RIGHT = new Position(1, 0);
+      var UP = new Position(0, -1);
+      var DOWN = new Position(0, 1);
+      function directionToString(dir) {
+        if (positionEqual(dir, LEFT)) {
+          return "left";
+        } else if (positionEqual(dir, RIGHT)) {
+          return "right";
+        } else if (positionEqual(dir, UP)) {
+          return "up";
+        } else if (positionEqual(dir, DOWN)) {
+          return "down";
+        }
+      }
       function Snake(state) {
         this.positions = [new Position(state.boardWidth/2, state.boardHeight/2)];
         this.positions.push(new Position(this.positions[0].x, this.positions[0].y + 1));
-        this.direction = new Position(1,0);
+      }
+      function oppositeDirection(dir) {
+        if (positionEqual(dir, LEFT)) {
+          return RIGHT;
+        } else if (positionEqual(dir, RIGHT)) {
+          return LEFT;
+        } else if (positionEqual(dir, UP)) {
+          return DOWN;
+        } else if (positionEqual(dir, DOWN)) {
+          return UP;
+        }
+        return LEFT;
+      }
+      function positionAdd(a, b) {
+        return new Position(a.x + b.x, a.y + b.y);
       }
       function positionEqual(a, b) {
         return a.x == b.x && a.y == b.y;
@@ -54,7 +87,7 @@
         return pos;
       }
       function setState(state) {
-        var CANVAS_WIDTH = 500;
+        var CANVAS_WIDTH = 480;
         var CANVAS_HEIGHT = CANVAS_WIDTH;
         var BOARD_WIDTH = 40;
         var BOARD_HEIGHT = 40;
@@ -65,8 +98,11 @@
         state.squareSize = CANVAS_WIDTH/BOARD_WIDTH;
         state.timeOfLastStep = 0;
         state.lost = false;
+        state.screen = SCREEN_INTRO;
+        state.mode = MODE_TWIST;
         state.backgroundColor = randomPastelColor().toString();
         state.snake = new Snake(state);
+        state.nextDirection = RIGHT;
         state.fruit = state.snake.positions[0];
         state.fruit = randomEmptyPosition(state);
         console.log("createdState");
@@ -77,6 +113,8 @@
             state.squareSize, state.squareSize);
       }
       function draw(ctx, state) {
+        ctx.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
+
         if (state.lost) {
           ctx.fillStyle = "black";
           ctx.font = "30px Consolas";
@@ -119,25 +157,65 @@
         }
         return false;
       }
+      function tryEatFruit(state) {
+        var pos = state.snake.positions;
+        let nextPos = positionAdd(pos[0], state.snake.direction);
+        if (positionEqual(nextPos, state.fruit)) {
+          // eat fruit
+          pos.unshift(nextPos);
+          // set up new fruit
+          state.fruit = randomEmptyPosition(state);
+          state.backgroundColor = randomPastelColor().toString();
+          return true;
+        }
+        return false;
+      }
+      function moveSnakeForward(state) {
+        var pos = state.snake.positions;
+        // takes tail and puts it in front of head
+        pos.pop();
+        let newHead = positionAdd(pos[0], state.snake.direction);
+        pos.unshift(newHead);
+        console.log("new head");
+        console.log(newHead);
+        if (lost(state)) {
+          state.lost = true;
+        }
+      }
+      function stepTwist(state) {
+        if (state.lost) {
+          return;
+        }
+        if (tryEatFruit(state)) {
+          var pos = state.snake.positions;
+          state.snake.positions.reverse();
+          state.snake.direction = oppositeDirection(state.snake.direction);
+          state.nextDirection = oppositeDirection(state.nextDirection);
+          
+          let nextPos = positionAdd(pos[0], state.snake.direction);
+          for (let i = 0; i < pos.length; i++) {
+            if (positionEqual(pos[i], nextPos)) {
+              state.snake.direction = oppositeDirection(state.snake.direction);
+              state.nextDirection = oppositeDirection(state.nextDirection);
+              break;
+            }
+          }
+        } 
+        moveSnakeForward(state);
+      }
+      function stepClassic(state) {
+        tryEatFruit(state);
+        moveSnakeForward(state);
+      }
       function step(state) {
         if (state.lost) {
           return;
         }
-        var pos = state.snake.positions;
-        if (positionEqual(pos[0], state.fruit)) {
-          // eaten fruit becomes head
-          pos.unshift(state.fruit);
-          state.fruit = randomEmptyPosition(state);
-          state.backgroundColor = randomPastelColor().toString();
-        } else {
-          // move snake
-          var newHead = pos.pop();
-          newHead.x = pos[0].x + state.snake.direction.x;
-          newHead.y = pos[0].y + state.snake.direction.y;
-          pos.unshift(newHead);
-          if (lost(state)) {
-            state.lost = true;
-          }
+        state.snake.direction = state.nextDirection;
+        if (state.mode == MODE_CLASSIC) {
+          stepClassic(state);
+        } else if (state.mode == MODE_TWIST) {
+          stepTwist(state);
         }
       }
       function init() {
@@ -151,28 +229,24 @@
             setState(state);
           }
           const keyName = event.key;
-          var LEFT = new Position(-1, 0);
-          var RIGHT = new Position(1, 0);
-          var UP = new Position(0, -1);
-          var DOWN = new Position(0, 1);
           if (keyName == "ArrowLeft") {
             if (!positionEqual(state.snake.direction, RIGHT)) {
-              state.snake.direction = LEFT;
+              state.nextDirection = LEFT;
             }
             event.preventDefault();
           } else if (keyName == "ArrowRight") {
             if (!positionEqual(state.snake.direction, LEFT)) {
-              state.snake.direction = RIGHT;
+              state.nextDirection = RIGHT;
             }
             event.preventDefault();
           } else if (keyName == "ArrowUp") {
             if (!positionEqual(state.snake.direction, DOWN)) {
-              state.snake.direction = UP;
+              state.nextDirection = UP;
             }
             event.preventDefault();
           } else if (keyName == "ArrowDown") {
             if (!positionEqual(state.snake.direction, UP)) {
-              state.snake.direction = DOWN;
+              state.nextDirection = DOWN;
             }
             event.preventDefault();
           }
